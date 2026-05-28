@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>价格监控面板</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Price Watch</p>
+          <h1>价格监控</h1>
+        </div>
+        <div class="status-strip" aria-live="polite">
+          <span class="status-pill" id="activeCount">0 个运行中</span>
+          <span class="status-pill" id="telegramState">Telegram 检查中</span>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="监控摘要">
+        <div class="metric">
+          <span>全部监控</span>
+          <strong id="totalCount">0</strong>
+        </div>
+        <div class="metric">
+          <span>最近价格</span>
+          <strong id="latestPrice">-</strong>
+        </div>
+        <div class="metric">
+          <span>下一次检查</span>
+          <strong id="nextCheck">-</strong>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <section class="monitor-panel" aria-labelledby="monitorHeading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Watching</p>
+              <h2 id="monitorHeading">监控列表</h2>
+            </div>
+            <button class="icon-button" id="refreshButton" type="button" title="刷新列表" aria-label="刷新列表">
+              <span aria-hidden="true">↻</span>
+            </button>
+          </div>
+          <div class="monitor-list" id="monitorList" aria-live="polite"></div>
+        </section>
+
+        <aside class="side-panel" aria-label="操作面板">
+          <form class="tool-panel" id="addForm">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Add</p>
+                <h2>添加监控</h2>
+              </div>
+            </div>
+
+            <label>
+              商品链接或货号
+              <input name="input" autocomplete="off" required placeholder="JZ3168 或 https://..." />
+            </label>
+
+            <label>
+              显示名称
+              <input name="name" autocomplete="off" placeholder="可留空自动识别" />
+            </label>
+
+            <div class="form-row">
+              <label>
+                网站
+                <select name="site">
+                  <option value="adidas.ca">adidas.ca</option>
+                  <option value="custom">自定义链接</option>
+                </select>
+              </label>
+              <label>
+                间隔
+                <input name="intervalMinutes" type="number" min="5" max="1440" value="60" />
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label>
+                基准价
+                <input name="baselinePrice" type="number" min="0" step="0.01" placeholder="当前价" />
+              </label>
+              <label>
+                提醒价
+                <input name="targetPrice" type="number" min="0" step="0.01" placeholder="低于/等于" />
+              </label>
+            </div>
+
+            <label class="checkline">
+              <input name="notifyOnAnyChange" type="checkbox" checked />
+              <span>价格有任何变化都通知</span>
+            </label>
+
+            <label class="checkline">
+              <input name="notifyOnDrop" type="checkbox" checked />
+              <span>低于基准价或提醒价时通知</span>
+            </label>
+
+            <button class="primary-button" type="submit">添加</button>
+          </form>
+
+          <form class="tool-panel" id="settingsForm">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Telegram</p>
+                <h2>通知设置</h2>
+              </div>
+            </div>
+            <label>
+              Bot Token
+              <input name="telegramToken" type="password" autocomplete="off" placeholder="留空则保留当前 token" />
+            </label>
+            <label>
+              Chat ID
+              <input name="telegramChatId" autocomplete="off" placeholder="例如 123456789" />
+            </label>
+            <div class="button-row">
+              <button class="secondary-button" type="submit">保存</button>
+              <button class="secondary-button" id="testTelegramButton" type="button">测试</button>
+            </div>
+          </form>
+        </aside>
+      </div>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

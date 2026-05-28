@@ -1,0 +1,5 @@
+node_modules/
+.DS_Store
+data/settings.json
+data/monitors.json
+data/*.tmp
