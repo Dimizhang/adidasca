@@ -36,6 +36,7 @@ http://localhost:4173
 ## 支持
 
 - adidas.ca 货号，例如 `JZ3168`
+- adidas.com/us 货号
 - 直接粘贴商品链接
 - 手动立即检查
 - 暂停、恢复、删除监控

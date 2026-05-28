@@ -222,7 +222,7 @@ function showToast(message) {
 
 function formatPrice(value, currency = "CAD") {
   if (value === null || value === undefined || value === "") return "-";
-  const symbol = currency === "CAD" ? "C$" : `${currency} `;
+  const symbol = currency === "CAD" ? "C$" : currency === "USD" ? "$" : `${currency} `;
   const number = Number(value);
   if (!Number.isFinite(number)) return "-";
   return `${symbol}${number.toFixed(Number.isInteger(number) ? 0 : 2)}`;

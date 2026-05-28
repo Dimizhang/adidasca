@@ -22,6 +22,23 @@ const DEFAULT_SETTINGS = {
 const CHECK_LOOP_MS = 30_000;
 const MIN_INTERVAL_MINUTES = 5;
 const MAX_BODY_BYTES = 1024 * 1024;
+const DEFAULT_SITE = "adidas.ca";
+const SITE_CONFIGS = {
+  "adidas.ca": {
+    currency: "CAD",
+    baseUrl: "https://www.adidas.ca",
+    searchPath: "/en/search",
+    productApi: "https://www.adidas.ca/api/products/",
+    acceptLanguage: "en-CA,en;q=0.9,zh-CN;q=0.7"
+  },
+  "adidas.com/us": {
+    currency: "USD",
+    baseUrl: "https://www.adidas.com",
+    searchPath: "/us/search",
+    productApi: "https://www.adidas.com/api/products/",
+    acceptLanguage: "en-US,en;q=0.9,zh-CN;q=0.7"
+  }
+};
 
 let checkInFlight = false;
 
@@ -159,7 +176,8 @@ async function createMonitor(body) {
     throw httpError(400, "请填写商品链接或货号");
   }
 
-  const site = stringField(body.site) || guessSite(input);
+  const site = normalizeSite(stringField(body.site) || guessSite(input));
+  const siteDefaults = siteConfig(site);
   const resolved = resolveInput(input, site);
   const intervalMinutes = clampNumber(
     Number(body.intervalMinutes || 60),
@@ -178,7 +196,7 @@ async function createMonitor(body) {
     site,
     url: resolved.url,
     checkUrl: resolved.checkUrl,
-    currency: stringField(body.currency) || "CAD",
+    currency: stringField(body.currency) || siteDefaults.currency,
     baselinePrice,
     targetPrice,
     intervalMinutes,
@@ -199,22 +217,25 @@ async function createMonitor(body) {
 
 function resolveInput(input, site) {
   const trimmed = input.trim();
+  const normalizedSite = normalizeSite(site || guessSite(trimmed));
+  const config = siteConfig(normalizedSite);
+
   if (/^https?:\/\//i.test(trimmed)) {
     const sku = extractSku(trimmed);
     return {
       sku,
       url: trimmed,
-      checkUrl: trimmed
+      checkUrl: sku && config.productApi ? `${config.productApi}${encodeURIComponent(sku)}` : trimmed
     };
   }
 
   const sku = trimmed.toUpperCase();
-  if (site === "adidas.ca") {
+  if (config.productApi) {
     return {
       sku,
-      name: `adidas ${sku}`,
-      url: `https://www.adidas.ca/en/search?q=${encodeURIComponent(sku)}`,
-      checkUrl: `https://www.adidas.ca/api/products/${encodeURIComponent(sku)}`
+      name: `${normalizedSite} ${sku}`,
+      url: `${config.baseUrl}${config.searchPath}?q=${encodeURIComponent(sku)}`,
+      checkUrl: `${config.productApi}${encodeURIComponent(sku)}`
     };
   }
 
@@ -227,12 +248,34 @@ function resolveInput(input, site) {
 
 function guessSite(input) {
   try {
-    const host = new URL(input).hostname.replace(/^www\./, "");
+    const parsed = new URL(input);
+    const host = parsed.hostname.replace(/^www\./, "");
     if (host.includes("adidas.ca")) return "adidas.ca";
+    if (host.includes("adidas.com") && parsed.pathname.startsWith("/us")) return "adidas.com/us";
+    if (host.includes("adidas.com")) return "adidas.com/us";
     return host || "custom";
   } catch {
-    return "adidas.ca";
+    return DEFAULT_SITE;
   }
+}
+
+function normalizeSite(site) {
+  const value = stringField(site).toLowerCase();
+  if (value === "adidas.us" || value === "adidas.com" || value === "www.adidas.com" || value === "us") {
+    return "adidas.com/us";
+  }
+  if (value === "www.adidas.ca" || value === "ca") return "adidas.ca";
+  return value || DEFAULT_SITE;
+}
+
+function siteConfig(site) {
+  return SITE_CONFIGS[normalizeSite(site)] || {
+    currency: "CAD",
+    baseUrl: "",
+    searchPath: "",
+    productApi: "",
+    acceptLanguage: "en,en;q=0.9"
+  };
 }
 
 async function updateMonitor(id, patch) {
@@ -365,11 +408,12 @@ async function checkMonitor(monitor, { manual = false } = {}) {
 }
 
 async function fetchPrice(monitor) {
+  const config = siteConfig(monitor.site);
   const response = await fetch(monitor.checkUrl || monitor.url, {
     headers: {
       "user-agent": "Mozilla/5.0 PriceMonitor/1.0",
       "accept": "text/html,application/json;q=0.9,*/*;q=0.8",
-      "accept-language": "en-CA,en;q=0.9,zh-CN;q=0.7"
+      "accept-language": config.acceptLanguage
     }
   });
 
@@ -418,15 +462,15 @@ function extractFromJson(data, monitor) {
 
   return {
     price,
-    currency: stringField(pricing.currency || pricing.currency_code || data.currency) || monitor.currency,
+    currency: normalizeCurrency(stringField(pricing.currency || pricing.currency_code || data.currency) || monitor.currency),
     saleDetected,
     name: stringField(data.name || productDescription.title || productDescription.name),
-    url: productUrl ? absoluteAdidasUrl(productUrl) : monitor.url
+    url: productUrl ? absoluteAdidasUrl(productUrl, monitor.site) : monitor.url
   };
 }
 
 function extractFromHtml(html, monitor) {
-  const jsonLd = extractJsonLd(html);
+  const jsonLd = extractJsonLd(html, monitor);
   if (jsonLd) return jsonLd;
 
   const metaPrice =
@@ -458,7 +502,7 @@ function extractFromHtml(html, monitor) {
   };
 }
 
-function extractJsonLd(html) {
+function extractJsonLd(html, monitor) {
   const matches = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
   for (const match of matches) {
     const raw = decodeHtml(match[1].trim());
@@ -470,7 +514,7 @@ function extractJsonLd(html) {
         if (price !== null) {
           return {
             price,
-            currency: normalizeCurrency(offer.priceCurrency || "CAD"),
+            currency: normalizeCurrency(offer.priceCurrency || monitor.currency || siteConfig(monitor.site).currency),
             saleDetected: false,
             name: stringField(data.name),
             url: stringField(data.url)
@@ -527,6 +571,7 @@ function firstMoneyMatch(html) {
   const clean = html.replace(/&nbsp;/g, " ");
   const patterns = [
     /(?:C\$|CA\$)\s*([0-9]+(?:[.,][0-9]{2})?)/i,
+    /(?:US\$|\$)\s*([0-9]+(?:[.,][0-9]{2})?)/i,
     /"price"\s*:\s*"?([0-9]+(?:\.[0-9]{1,2})?)"?/i,
     /"salePrice"\s*:\s*"?([0-9]+(?:\.[0-9]{1,2})?)"?/i
   ];
@@ -721,12 +766,14 @@ function slugify(value) {
 function normalizeCurrency(currency) {
   const value = String(currency || "").trim().toUpperCase();
   if (value === "C$" || value === "CA$") return "CAD";
+  if (value === "$" || value === "US$") return "USD";
   return value || "CAD";
 }
 
 function formatPrice(price, currency = "CAD") {
   if (price === null || price === undefined) return "未知";
-  const symbol = normalizeCurrency(currency) === "CAD" ? "C$" : `${currency} `;
+  const normalized = normalizeCurrency(currency);
+  const symbol = normalized === "CAD" ? "C$" : normalized === "USD" ? "$" : `${currency} `;
   return `${symbol}${Number(price).toFixed(Number.isInteger(price) ? 0 : 2)}`;
 }
 
@@ -779,8 +826,10 @@ function looksLikeJson(text) {
   return trimmed.startsWith("{") || trimmed.startsWith("[");
 }
 
-function absoluteAdidasUrl(url) {
+function absoluteAdidasUrl(url, site) {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;
-  return `https://www.adidas.ca${url.startsWith("/") ? "" : "/"}${url}`;
+  const config = siteConfig(site);
+  const baseUrl = config.baseUrl || "https://www.adidas.ca";
+  return `${baseUrl}${url.startsWith("/") ? "" : "/"}${url}`;
 }
