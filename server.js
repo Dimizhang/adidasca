@@ -176,7 +176,7 @@ async function createMonitor(body) {
     throw httpError(400, "请填写商品链接或货号");
   }
 
-  const site = normalizeSite(stringField(body.site) || guessSite(input));
+  const site = normalizeSite(isUrl(input) ? guessSite(input) : stringField(body.site) || guessSite(input));
   const siteDefaults = siteConfig(site);
   const resolved = resolveInput(input, site);
   const intervalMinutes = clampNumber(
@@ -220,12 +220,12 @@ function resolveInput(input, site) {
   const normalizedSite = normalizeSite(site || guessSite(trimmed));
   const config = siteConfig(normalizedSite);
 
-  if (/^https?:\/\//i.test(trimmed)) {
+  if (isUrl(trimmed)) {
     const sku = extractSku(trimmed);
     return {
       sku,
       url: trimmed,
-      checkUrl: sku && config.productApi ? `${config.productApi}${encodeURIComponent(sku)}` : trimmed
+      checkUrl: trimmed
     };
   }
 
@@ -257,6 +257,10 @@ function guessSite(input) {
   } catch {
     return DEFAULT_SITE;
   }
+}
+
+function isUrl(input) {
+  return /^https?:\/\//i.test(String(input || "").trim());
 }
 
 function normalizeSite(site) {
