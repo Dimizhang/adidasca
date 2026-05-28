@@ -49,7 +49,7 @@ function render() {
   els.telegramState.classList.toggle("connected", Boolean(state.settings?.telegram?.connected));
 
   const latest = [...state.monitors]
-    .filter((monitor) => monitor.lastCheckedAt)
+    .filter((monitor) => monitor.lastCheckedAt && Number.isFinite(Number(monitor.lastPrice)))
     .sort((a, b) => new Date(b.lastCheckedAt) - new Date(a.lastCheckedAt))[0];
   els.latestPrice.textContent = latest ? formatPrice(latest.lastPrice, latest.currency) : "-";
 
@@ -82,7 +82,8 @@ function renderMonitor(monitor) {
   const target = monitor.targetPrice === null ? "无提醒价" : `提醒 ${formatPrice(monitor.targetPrice, monitor.currency)}`;
   const checked = monitor.lastCheckedAt ? `上次 ${formatDateTime(monitor.lastCheckedAt)}` : "尚未检查";
   const next = monitor.nextCheckAt ? `下次 ${relativeTime(monitor.nextCheckAt)}` : "无计划";
-  const sku = monitor.sku ? `货号 ${escapeHtml(monitor.sku)}` : escapeHtml(monitor.site || "");
+  const sku = monitor.sku ? `货号 ${escapeHtml(monitor.sku)}` : "无货号";
+  const site = monitor.site ? `站点 ${escapeHtml(monitor.site)}` : "";
   const error = monitor.lastError ? `<div class="monitor-status error">${escapeHtml(monitor.lastError)}</div>` : "";
 
   return `
@@ -93,6 +94,7 @@ function renderMonitor(monitor) {
           <span class="tag ${statusClass}">${statusText}</span>
         </div>
         <div class="monitor-meta">
+          <span>${site}</span>
           <span>${sku}</span>
           <span>${baseline}</span>
           <span>${target}</span>

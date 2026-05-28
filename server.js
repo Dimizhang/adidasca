@@ -418,7 +418,7 @@ async function fetchPrice(monitor) {
   });
 
   if (!response.ok) {
-    throw new Error(`页面返回 ${response.status}`);
+    throw new Error(responseStatusMessage(monitor, response.status));
   }
 
   const contentType = response.headers.get("content-type") || "";
@@ -433,6 +433,19 @@ async function fetchPrice(monitor) {
   }
 
   return extractFromHtml(text, monitor);
+}
+
+function responseStatusMessage(monitor, status) {
+  const sku = monitor.sku ? `货号 ${monitor.sku}` : "这个商品";
+  if (isAdidasProductApi(monitor) && (status === 403 || status === 404)) {
+    const reason = status === 403 ? "没有返回商品数据" : "没有找到商品数据";
+    return `${monitor.site} ${reason}：${sku}。请确认国家站是否选对，或改用商品详情页链接。`;
+  }
+  return `页面返回 ${status}`;
+}
+
+function isAdidasProductApi(monitor) {
+  return /adidas\.(?:ca|com)\/api\/products\//i.test(monitor.checkUrl || "");
 }
 
 function extractFromJson(data, monitor) {
