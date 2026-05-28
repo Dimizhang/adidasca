@@ -413,18 +413,28 @@ async function checkMonitor(monitor, { manual = false } = {}) {
 
 async function fetchPrice(monitor) {
   const config = siteConfig(monitor.site);
-  const response = await fetch(monitor.checkUrl || monitor.url, {
-    headers: {
-      "user-agent": "Mozilla/5.0 PriceMonitor/1.0",
-      "accept": "text/html,application/json;q=0.9,*/*;q=0.8",
-      "accept-language": config.acceptLanguage
-    }
-  });
+  const requestHeaders = {
+    "user-agent": "Mozilla/5.0 PriceMonitor/1.0",
+    "accept": "text/html,application/json;q=0.9,*/*;q=0.8",
+    "accept-language": config.acceptLanguage
+  };
+  const response = await fetch(monitor.checkUrl || monitor.url, { headers: requestHeaders });
 
   if (!response.ok) {
+    const fallbackUrl = adidasProductApiFallbackUrl(monitor, config);
+    if (fallbackUrl) {
+      const fallbackResponse = await fetch(fallbackUrl, { headers: requestHeaders });
+      if (fallbackResponse.ok) {
+        return extractPriceResponse(fallbackResponse, monitor);
+      }
+    }
     throw new Error(responseStatusMessage(monitor, response.status));
   }
 
+  return extractPriceResponse(response, monitor);
+}
+
+async function extractPriceResponse(response, monitor) {
   const contentType = response.headers.get("content-type") || "";
   const text = await response.text();
 
@@ -437,6 +447,13 @@ async function fetchPrice(monitor) {
   }
 
   return extractFromHtml(text, monitor);
+}
+
+function adidasProductApiFallbackUrl(monitor, config) {
+  if (!config.productApi || isAdidasProductApi(monitor)) return "";
+  const sku = monitor.sku || extractSku(monitor.url || monitor.checkUrl || "");
+  if (!sku) return "";
+  return `${config.productApi}${encodeURIComponent(sku)}`;
 }
 
 function responseStatusMessage(monitor, status) {
