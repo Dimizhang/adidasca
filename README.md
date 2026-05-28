@@ -16,6 +16,16 @@ http://localhost:4173
 
 如果你在 Finder 里操作，也可以双击 `start.command` 启动。
 
+## 保存到 Git
+
+手动保存当前项目版本：
+
+```bash
+./save-to-git.command
+```
+
+也可以双击 `save-to-git.command`。它会提交除 `.gitignore` 排除文件以外的变化；`data/settings.json` 和 `data/monitors.json` 不会被保存到 Git。
+
 ## 数据
 
 - 监控列表保存在 `data/monitors.json`
